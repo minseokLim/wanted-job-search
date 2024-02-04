@@ -6,12 +6,13 @@ from time import sleep
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 
 # 경력 및 필터 조건이 적용된 채용 공고 url
-FILTERED_RECRUITMENT_URL = 'https://www.wanted.co.kr/wdlist/518?country=kr&job_sort=job.popularity_order&years=3&selected=872&selected=660&locations=seoul.all&locations=gyeonggi.all'
+FILTERED_RECRUITMENT_URL = 'https://www.wanted.co.kr/wdlist/518?country=kr&job_sort=job.popularity_order&years=5&selected=872&selected=660&locations=seoul.all&locations=incheon.all&locations=gyeonggi.all'
 
 # 채용 공고 포지션에 이 정규식과 매칭되는 공고는 필터링한다.
 FILTERING_POSITION_REGEX = '(front|프론트|Node\\.?js|Python|신입|안드로이드|android|php|jsp)'
@@ -76,8 +77,7 @@ def run():
             else:
                 retry_count += 1
 
-            print('에러 발생. err_index : ' + str(err_index) + ', 재시도 회차 : ' + str(retry_count))
-            continue
+            print('에러 발생. href : ' + href)
 
         now_progress = int((index + 1) * 100 / hrefs_length)
 
@@ -103,25 +103,25 @@ def run():
 
 
 def get_chrome_driver(options):
-    driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=options)
+    driver = webdriver.Chrome(options=options, service=Service(ChromeDriverManager().install()))
     driver.implicitly_wait(time_to_wait=10)
     return driver
 
 
 def login(driver, email, password):
-    login_button = driver.find_element(by=By.CLASS_NAME, value='signUpButton')
+    login_button = driver.find_element(by=By.CLASS_NAME, value='Button_Button__interaction__kkYaa')
     login_button.click()
 
-    email_input = driver.find_element(by=By.ID, value='email')
-    email_input.send_keys(email)
-
-    email_login_button = driver.find_element(by=By.CLASS_NAME, value='email-login-button')
+    email_login_button = driver.find_element(by=By.CLASS_NAME, value='css-1d79him')
     email_login_button.click()
 
-    password_input = driver.find_element(by=By.ID, value='password-text-field')
+    email_input = driver.find_element(by=By.NAME, value='email')
+    email_input.send_keys(email)
+
+    password_input = driver.find_element(by=By.NAME, value='password')
     password_input.send_keys(password)
 
-    enter_password_button = driver.find_element(by=By.CLASS_NAME, value='EnterPassword_button__Of971')
+    enter_password_button = driver.find_element(by=By.CLASS_NAME, value='css-1yzn4b')
     enter_password_button.click()
 
 
@@ -168,9 +168,9 @@ def get_recruitment_hrefs(driver):
     start = time.time()
     print('채용 공고 URL 추출 시작')
 
-    li_tags = driver.find_elements(by=By.XPATH, value='//*[@data-cy="job-list"]/li')
+    li_tags = driver.find_elements(by=By.CLASS_NAME, value='Card_Card__lU7z_')
     while li_tags is None:
-        li_tags = driver.find_elements(by=By.XPATH, value='//*[@data-cy="job-list"]/li')
+        li_tags = driver.find_elements(by=By.XPATH, value='Card_Card__lU7z_')
 
     filtered_li_tags = list(filter(
         lambda li: not re.search(FILTERING_POSITION_REGEX, get_job_position(li), re.IGNORECASE) and not re.search(
@@ -200,17 +200,17 @@ def get_recruitment_hrefs(driver):
 
 
 def get_job_position(data):
-    position = data.find_element(by=By.CLASS_NAME, value='job-card-position')
+    position = data.find_element(by=By.CLASS_NAME, value='JobCard_JobCard__body__position__P8R0W')
     while position is None:
-        position = data.find_element(by=By.CLASS_NAME, value='job-card-position')
+        position = data.find_element(by=By.CLASS_NAME, value='JobCard_JobCard__body__position__P8R0W')
 
     return position.text
 
 
 def get_company_name(data):
-    company_name = data.find_element(by=By.CLASS_NAME, value='job-card-company-name')
+    company_name = data.find_element(by=By.CLASS_NAME, value='JobCard_JobCard__body__company__F6XoH')
     while company_name is None:
-        company_name = data.find_element(by=By.CLASS_NAME, value='job-card-company-name')
+        company_name = data.find_element(by=By.CLASS_NAME, value='JobCard_JobCard__body__company__F6XoH')
 
     return company_name.text
 
@@ -226,14 +226,14 @@ def get_a_tag_href(data):
 def add_bookmark(driver, href):
     driver.get(href)
     job_description = get_job_description(driver)
-    tag_texts = driver.find_element(by=By.CLASS_NAME, value='Tags_tagsClass__mvehZ').text
+    tag_texts = driver.find_element(by=By.CLASS_NAME, value='CompanyTags_CompanyTags__list__KgTBZ').text
 
     if is_fit_jd(job_description) and is_fit_tags(tag_texts):
         bookmark_button = get_bookmark_button(driver)
 
         if bookmark_button is not None:
-            company = driver.find_elements(by=By.TAG_NAME, value='h6')[0].text
-            position = driver.find_element(by=By.TAG_NAME, value='h2').text
+            company = driver.find_elements(by=By.CLASS_NAME, value='JobHeader_JobHeader__Tools__Company__Link__QjFBa')[0].text
+            position = driver.find_element(by=By.TAG_NAME, value='h1').text
 
             addable = bookmark_button.get_attribute('data-kind') == 'add'
 
@@ -245,8 +245,11 @@ def add_bookmark(driver, href):
 
 
 def get_job_description(driver):
+    detail_button = driver.find_element(by=By.CLASS_NAME, value='Button_Button__fullWidth__RU4tf')
+    detail_button.send_keys(Keys.ENTER)
+
     job_description = driver.find_element(by=By.CLASS_NAME, value='JobDescription_JobDescription__VWfcb')
-    while job_description is None:
+    while job_description is None or job_description == '':
         job_description = driver.find_element(by=By.CLASS_NAME, value='JobDescription_JobDescription__VWfcb')
 
     return job_description.text
@@ -276,11 +279,11 @@ def is_fit_tags(tag_texts):
 
 
 def get_bookmark_button(driver):
-    bookmark_buttons = driver.find_elements(by=By.CLASS_NAME, value='BookmarkBtn_bookmarkBtn__DgWcS')
+    bookmark_buttons = driver.find_elements(by=By.CLASS_NAME, value='BookmarkBtn_BookmarkBtn__head__MbDMM')
 
     i = 0
     while not bookmark_buttons and i < 3:
-        bookmark_buttons = driver.find_elements(by=By.CLASS_NAME, value='BookmarkBtn_bookmarkBtn__DgWcS')
+        bookmark_buttons = driver.find_elements(by=By.CLASS_NAME, value='BookmarkBtn_BookmarkBtn__head__MbDMM')
         i += 1
 
     if bookmark_buttons:
